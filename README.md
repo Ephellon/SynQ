@@ -145,7 +145,7 @@ _return: if the second character is missing, then the first character will be re
 Returns an array of function data.
 - Usage: `SynQ.parseFunction(function-string)`
 - Arguments: String
-- Returns: Array => {0: [function parameters], 1: [function statements], 2: [function name], length: 3}
+- Returns: Array => `{0: [function parameters], 1: [function statements], 2: [function name], length: 3}`
 
 ## parseSize
 Returns a number from an SI formatted* string.
@@ -159,7 +159,7 @@ _* Does not recognize 'd' (deci), 'h' (hecto) or 'c' (centi)_
 Returns a URL object.
 - Usage: `SynQ.parseURL(URL)`
 - Arguments: String
-- Returns: Object => {href, origin, protocol, scheme, username, password, host, port, path, search, searchParameters}
+- Returns: Object => `{href, origin, protocol, scheme, username, password, host, port, path, search, searchParameters}`
 
 ## pop
 Removes, and returns the item from the local storage.
@@ -177,7 +177,7 @@ Used to prevent a value from being used.
 - Returns: Undefined
 - Throws: Error(<message[ + helper-link]>)
 
-_helper-link: the word, or phrase used by SynQ.help to display the help message, e.g. SynQ.prevent(null, [null], 'This is an example error', 'example') => "... see SynQ.help('example')"._
+_helper-link: the word, or phrase used by SynQ.help to display the help message, e.g. `SynQ.prevent(null, [null], 'This is an example error', 'example')` => "... see SynQ.help('example')"._
 
 ## pull
 Returns data from a local storage array.
