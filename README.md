@@ -154,7 +154,7 @@ _* Does not recognize 'd' (deci), 'h' (hecto) or 'c' (centi)_
 Returns a URL object.
 - Usage: `SynQ.parseURL(URL)`
 - Arguments: String
-- Returns: Object => `{href, origin, protocol, scheme, username, password, host, port, path, search, searchParameters}`
+- Returns: Object => `{href, origin, protocol, scheme, username, password, host, port, path, search, searchParameters, hash}`
 
 ## pop
 Removes, and returns the item from the local storage.
