@@ -104,11 +104,6 @@ Displays help messages.
 - Arguments: String
 - Returns: String
 
-## host
-Creates a main object (for multiple frames), and is given the highest priority. Also sets the element's [NAME] to its [ID], or [SYNQ-UUID].
-- Usage: `<element synq-host=host-name>...</element>`
-- Interpreted Type: String
-
 ## last
 An array that's used to hold each item's name in the order they're created.
 - Usage: `SynQ.last = ['name-1', 'name-2'...]`
