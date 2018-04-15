@@ -45,7 +45,8 @@ Adds an event listener to SynQ's push, pull, pop, clear, broadcast, retrieve, or
 - Arguments: String, Function
 - Returns: Number
 
-event-name: push, pull, pop, clear, broadcast, retrieve, or cage.
+_event-name: push, pull, pop, clear, broadcast, retrieve, or cage._
+
 _return: the number of events attached._
 
 ## append
@@ -62,7 +63,7 @@ Removes all owned items from storage (related to SynQ).
 - Arguments: [Boolean]
 - Returns: Undefined
 
-remove-all: if set to true, will remove all private items too.
+_remove-all: if set to true, will remove all private items too._
 
 ## decodeURL
 Decodes a URL string.
@@ -124,7 +125,7 @@ Returns the currently owned storage items.
 - Arguments: Boolean
 - Returns: Object
 
-show-all: when set to true, will return private items as well.
+_show-all: when set to true, will return private items as well._
 
 ## lock
 Locks and unlocks a string.
@@ -152,7 +153,7 @@ Returns a number from an SI formatted* string.
 - Arguments: String[, Number[, String]]
 - Returns: Number
 
-* Does not recognize 'd' (deci), 'h' (hecto) or 'c' (centi)
+_* Does not recognize 'd' (deci), 'h' (hecto) or 'c' (centi)_
 
 ## parseURL
 Returns a URL object.
@@ -176,8 +177,7 @@ Used to prevent a value from being used.
 - Returns: Undefined
 - Throws: Error(<message[ + helper-link]>)
 
-helper-link: the word, or phrase used by SynQ.help to display the help message,
-- - e.g. SynQ.prevent(null, [null], 'This is an example error', 'example') => "... see SynQ.help('example')".
+_helper-link: the word, or phrase used by SynQ.help to display the help message, e.g. SynQ.prevent(null, [null], 'This is an example error', 'example') => "... see SynQ.help('example')"._
 
 ## pull
 Returns data from a local storage array.
@@ -209,7 +209,7 @@ Removes a(n) event listener(s).
 - Arguments: String[, String]
 - Returns: Array | String
 
-event-name: push, pull, pop, clear, broadcast, retrieve, or cage. If left empty, will remove <function-name> from every event.
+_event-name: push, pull, pop, clear, broadcast, retrieve, or cage. If left empty, will remove <function-name> from every event._
 
 ## salt
 Salts (encrypts) a string, usually a password.
@@ -231,7 +231,7 @@ Hashes a string (think of SHA, or MD5).
 - Arguments: String[, Float]
 - Returns: String
 
-fidelity-level: determines the size of the returned string. The closer to 1 the level is, the shorter the string.
+_fidelity-level: determines the size of the returned string. The closer to 1 the level is, the shorter the string._
 
 ## signature
 The UUID of the current page (if use_global_synq_token is undefined), or current domain.
@@ -240,14 +240,14 @@ Current Signature: synq://njp494dk4/
 
 ## size
 1. Returns the maximum amount of space for the storage (in bytes; 1B = 8b)
-- Usage: `SynQ.size()`
-- Arguments: NONE
-- Returns: Integer
+  - Usage: `SynQ.size()`
+  - Arguments: NONE
+  - Returns: Integer
 
 2. Returns the SI formatted version of the given number.
-- Usage: `SynQ.size(number[base, [symbol]])`
-- Arguments: Number[, Number[, String]]
-- Returns: String
+  - Usage: `SynQ.size(number[base, [symbol]])`
+  - Arguments: Number[, Number[, String]]
+  - Returns: String
 
 _base: the base to use, e.g. 1000; default is 1024._
 _symbol: the symbol to append to the returned string, default is 'iB'._
@@ -285,6 +285,7 @@ Unpacks (decodes) a UTF-16 character into two UTF-8 characters.
 - Usage: `SynQ.unpack16(character)`
 - Arguments: Character
 - Returns: String
+
 _return: automatically handles UTF-8 characters, and returns the character iteslf._
 
 ## upload
