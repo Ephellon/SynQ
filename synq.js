@@ -1236,7 +1236,7 @@
     /* Polyfills */
     // localStorage - Mozilla
     if(!('localStorage' in win) || (use_synq_token_cookie !== undefined && !SA))
-        Object.defineProperty(win, 'localStorage', new(() => {
+        Object.defineProperty(win, 'localStorage', new(function() {
             let keys = [],
                 StorageObject = {},
                 onstorage = new CustomEvent('storage', {
@@ -1352,7 +1352,7 @@
 
     // navigator.connection - Mozilla, Ephellon
     if(!('connection' in nav))
-        Object.defineProperty(win, 'NetworkInformation', new(() => {
+        Object.defineProperty(win, 'NetworkInformation', new(function() {
             let keys = [],
                 NetworkObject = {},
                 onnetwork = new CustomEvent('online', {
