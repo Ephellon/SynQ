@@ -76,7 +76,7 @@
             window[property] = window[IE[property]] || window[property];
 
         (_ => {
-            CustomEvent = (event, parameters = { bubbles: false, cancelable: false, detail: undefined }) => {
+            CustomEvent = function(event, parameters = { bubbles: false, cancelable: false, detail: undefined }) {
                 let e = doc.createEvent('CustomEvent');
 
                 e.initCustomEvent(event, parameters.bubbles, parameters.cancelable, parameters.detail);
@@ -92,8 +92,9 @@
     } else if(CustomEvent === undefined) {
         // Safari
         (_ => {
-            CustomEvent = (event, parameters = { bubbles: false, cancelable: false, detail: undefined }) =>
+            CustomEvent = function(event, parameters = { bubbles: false, cancelable: false, detail: undefined }) {
                 addEventListener(event, parameters);
+            }
 
             CustomEvent.prototype = Event.prototype;
 
