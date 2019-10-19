@@ -1287,7 +1287,7 @@
             return space + string.replace(/\:\s+/, space? ': ': ':');
         }
 
-        if(!!atypes.indexOf(filter.constructor))
+        if(!!~atypes.indexOf(filter.constructor))
             filterfn = (key, value) => !!~filter.indexOf(key);
         else if(filter instanceof Function)
             filterfn = filter;
