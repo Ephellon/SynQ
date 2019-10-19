@@ -62,8 +62,10 @@
 
     /* The SynQ flags */
     let use_synq_token_global,
-        use_synq_token_utf8,
-        use_synq_token_cookie;
+        use_synq_token_utf16,
+        use_synq_token_cookie,
+        use_synq_token_uuid,
+        use_synq_token_vpn;
 
     window = top || global || window || frame || self || this || {};
     document = window.document || {};
@@ -94,7 +96,7 @@
         (_ => {
             CustomEvent = function(event, parameters = { bubbles: false, cancelable: false, detail: undefined }) {
                 addEventListener(event, parameters);
-            }
+            };
 
             CustomEvent.prototype = Event.prototype;
 
@@ -192,20 +194,28 @@
         ++SynQ[__];
 
         if(name === null)
-            name = SynQ.name;
+            name = SynQ.syn;
         if(name instanceof Array)
             name = name.join('],[');
 
         let messages = [],
             uuids = SynQ.get('.uuids'),
             copies = {},
+            query;
+
+        try {
             query = doc.querySelectorAll(`[${ name }]`);
+        } catch(error) {
+            return error;
+        }
 
         uuids = (uuids || '').split(',');
 
         function fetch(e) {
             let a = e.attributes,
                 n =
+                    ('synq-attr' in a)?
+                        '#attr':
                     ('synq-data' in a)?
                         ('value' in e)?
                             'value':
@@ -219,10 +229,23 @@
             if(n === '')
                 return n;
 
+            switch(n) {
+                case '#attr':
+                    let o = {},
+                        l = a['synq-attr'].value,
+                        f = (v, i, r) => o[v] = a[v].value;
+
+                    if(!l.length)
+                        [...a].map(f);
+                    else
+                        l.split(/\s+/).map(f);
+                    return o;
+            }
+
             return e[n];
         }
 
-        for(let index = 0, element, attr, tag, id, uuid, name, value, host, u; index < query.length; index++) {
+        for(let index = 0, element, attr, tag, id, uuid, name, value, host, o, u; index < query.length; o = !1, index++) {
             // Handle the elements' information
             element = query[index];
             attr = element.attributes;
@@ -234,7 +257,7 @@
             copies[tag] |= 0;
 
             // Setup the SynQ host(s)
-            if(!host)
+            if(host)
                 element.setAttribute('name', SynQ.host = host || id || uuid || name);
 
             // Adds copies of elements for the UUID to work properly
@@ -242,13 +265,20 @@
                 `#${ id || uuid }`:
             `:nth-child(${ ++copies[tag] })`;
 
-            if(!uuid) {
-                // Assign the element's UUID
-                uuid = SynQ.sign(tag, 1);
+            // Get, and test the value
+            value = fetch(element);
 
-                // Set the element's UUID for future references
-                element.setAttribute('synq-uuid', uuid);
-            }
+            if(o = typeof value == 'object')
+                value = SynQ.defalte(value);
+
+            // Assign the element's UUID
+            if(!uuid)
+                uuid = (o? '!': '') + SynQ.sign(tag, 1);
+            else
+                uuid = /^!/.test(uuid)? uuid: `!${ uuid }`;
+
+            // Set the element's UUID for future references
+            element.setAttribute('synq-uuid', uuid);
 
             // Push the UUID
             if(!~uuids.indexOf(uuid))
@@ -256,23 +286,22 @@
 
             // Push the messages
             uuid = `.values/#${ uuid }`;
-            value = fetch(element);
 
-            messages.push(value);
+            messages.push(SynQ.encodeURL(value));
             SynQ.set(uuid, value);
         }
 
         SynQ.set('.values', messages.join(SynQ.esc));
-        SynQ.set('.uuids', uuids.join(','));
+        SynQ.set('.uuids', uuids.join(',').replace(/^,+|,+$/g, ''));
 
         --SynQ[__];
     };
 
     /* Helper functions/properties */
-    SynQ.esc = `<!-- synq-delimeter -->`;
+    SynQ.esc = `%%`;
     // change to your liking; this is the list's delimeter
 
-    SynQ.syn = 'synq-data synq-html synq-text synq-host'.split(' ');
+    SynQ.syn = 'synq-attr synq-data synq-text synq-html synq-host'.split(' ');
     // Change this accordingly; this is the synchronizing attribute for your elements
     // synq-data: .innerText OR .value (preference to .value)
     // synq-text: .innerHTML
@@ -286,7 +315,13 @@
         let messages = SynQ.get('.values'),
             uuids = SynQ.get('.uuids'),
             copies = {},
+            query;
+
+        try {
             query = doc.querySelectorAll(`[${ SynQ.syn.join('],[') }]`);
+        } catch(error) {
+            return error;
+        }
 
         messages = (messages || '').length?
             messages.split(SynQ.esc):
@@ -299,6 +334,8 @@
         function write(e, m) {
             let a = e.attributes,
                 n =
+                    ('synq-attr' in a)?
+                        '#attr':
                     ('synq-data' in a)?
                         ('value' in e)?
                             'value':
@@ -312,11 +349,18 @@
             if(n === '')
                 return n;
 
+            switch(n) {
+                case '#attr':
+                    for(let p in m)
+                        e.setAttribute(p, m[p]);
+                    return a;
+            }
+
             e[n] = m? m: e[n];
         }
 
         updating:
-        for(let index = 0, length = query.length, element, attr, tag, id, uuid, name, value, host, skip, u; index < length; index++) {
+        for(let index = 0, length = query.length, element, attr, tag, id, uuid, name, value, host, skip, o, u; index < length; o = !1, index++) {
             // The elements' information
             element = query[index];
             tag = element.tagName;
@@ -347,26 +391,35 @@
                 `#${ id || uuid }`:
             `:nth-child(${ ++copies[tag] })`;
 
-            if(uuid === null) {
-                // Get the element's UUID
+            // Get the element's UUID
+            if(uuid === null)
                 uuid = SynQ.sign(tag, 1);
-
-                // Set the element's UUID for future references
-                element.setAttribute('synq-uuid', uuid);
-            }
 
             // The UUID is set (preferred)
             // Write confidently, even if the HTML document has changed
             if(uuid) {
-                value = SynQ.get(`.values/#${ uuid }`);
-                write(element, value || '');
+                value = SynQ.get(`.values/#!${ uuid }`);
+                value = (o = value !== null)?
+                    value:
+                SynQ.get(`.values/#${ uuid }`);
+
+                value = o? value: '';
             }
             // UUID is NOT set
             // Write, assuming the HTML document hasn't changed
             else {
                 value = messages[index] || '';
-                write(element, value);
             }
+
+            // Set the element's UUID for future references
+            element.setAttribute('synq-uuid', uuid);
+
+            value = SynQ.decodeURL(value);
+
+            if(o || /^!/.test(uuid))
+                value = SynQ.inflate(value);
+
+            write(element, value);
         }
 
         --SynQ[__];
@@ -383,7 +436,7 @@
 
         event = `${ SynQ.eventName }/${ event }/#`;
 
-        let events = SynQ.get(event + 0),
+        let events = SynQ.get(event + '!'), // synq://uuid/#!
             fn = SynQ.parseFunction(callback),
             nm = fn[2] || events.length;
 
@@ -394,8 +447,8 @@
         if(!~events.indexOf(nm))
             events.push(nm);
 
-        SynQ.set(event + 0, events);
-        SynQ.set(event + name, callback);
+        SynQ.set(event + '!', events);
+        SynQ.set(event + name, callback + '');
 
         return --SynQ[__], events.length - 1;
     };
@@ -479,7 +532,7 @@
         url = url + '';
 
         for(let regexp = /%([a-f]\d){2}/ig; regexp.test(url);)
-            url = url.replace(regexp, ($0, $1, $_, $$) =>
+            url = url.replace(regexp, ($0, $1, $$, $_) =>
                 String.fromCharCode(+(`0x${ $1 }`)) + '\r\f'
                 // \r\f prevents intentional %code from being removed
             );
@@ -490,9 +543,10 @@
     /* The storage oriented functions */
     // List all of the current data (paths)
     SynQ.list = all => {
-        let regexp = RegExp(
-            `^(${ use_synq_token_global || all? 'synq://localhost:(443|80)/.*|': '' }${ SynQ.signature.replace(/(\W)/g, '\\$1') })${ all? '.+': '[^\\.].+' }$`
-        ),
+        let signature = SynQ.shadow || SynQ.signature,
+            regexp = RegExp(
+                `^(${ use_synq_token_global || all? 'synq://localhost:(443|80)/.*|': '' }${ signature.replace(/(\W)/g, '\\$1') })${ all? '.+': '[^\\.].+' }$`
+            ),
             array = {};
 
         for(let item in storage)
@@ -502,15 +556,77 @@
         return array;
     };
 
+    // Search for entries
+    SynQ.find = (query, all, results = []) => {
+        if(/^synq:\/\/([^\n\r\f\v]+)\/\?/.test(query)) {
+            let url = SynQ.parseURL(query),
+                original = SynQ.signature,
+                shadow = SynQ.shadow,
+                shade = url.origin + '/',
+                params = url.searchParameters;
+
+            SynQ.shadow = shade;
+            results = SynQ.find(params.query, params.all);
+            SynQ.shadow = shadow;
+
+            return results;
+        }
+
+        if(query instanceof Array) {
+            query.forEach(entry => results.concat(SynQ.find(entry, all, results)));
+
+            return results;
+        }
+
+        let owned = SynQ.list(all),
+            test;
+
+        if(query instanceof RegExp)
+            test = string => query.test(string);
+        else
+            test = string => (string == (query += '') || !!~string.indexOf(query));
+
+        for(let entry in owned)
+            if(!~results.indexOf(entry) && (test(entry) || test(owned[entry] + '')))
+                results.push(entry);
+
+        return results;
+    };
+
     // The 'clear all' function
     SynQ.clear = all => {
-        let regexp = RegExp(`^(${ SynQ.signature.replace(/(\W)/g, '\\$1') })${ all? '.+': '(.*/)?[^\\.].+' }$`);
+        let signature = SynQ.shadow || SynQ.signature,
+            regexp = RegExp(`^(${ signature.replace(/(\W)/g, '\\$1') })${ all? '.+': '(.*/)?[^\\.].+' }$`);
 
         for(let item in storage)
             if(regexp.test(item))
                 storage.removeItem(item);
 
         return SynQ.triggerEventListener('clear');
+    };
+
+    // Import items from the storage
+    SynQ.import = name => {
+        SynQ.prevent(name, [undefined, null], ERROR.NO_NAME, 'import');
+
+        let data = storage.getItem(name);
+
+        storage.setItem(SynQ.signature + name, data);
+
+        SynQ.last.push(name);
+
+        return SynQ.triggerEventListener('import', name);
+    };
+
+    // Export items to the storage
+    SynQ.export = name => {
+        SynQ.prevent(name, [undefined, null], ERROR.NO_NAME, 'export');
+
+        let data = storage.getItem(SynQ.signature + name);
+
+        storage.setItem(name, data);
+
+        return SynQ.triggerEventListener('export', name);
     };
 
     // Single, local targets //
@@ -552,9 +668,9 @@
 
         data = data + '';
 
-        let UTF8 = use_synq_token_utf8;
+        let UTF16 = use_synq_token_utf16;
 
-        if(UTF8)
+        if(UTF16)
             SynQ.prevent(data, /[^\u0000-\u00ff]/, ERROR.UTF8_ONLY, 'set');
 
         if(key !== null) {
@@ -564,7 +680,7 @@
             key = '';
         }
 
-        if(UTF8 && data) {
+        if(UTF16 && data) {
             let array = [];
             for(let index = 0, length = data.length; index < length;)
                 array.push(SynQ.pack16(data[index++], data[index++]));
@@ -583,17 +699,17 @@
         SynQ.prevent(name, [undefined, null], ERROR.NO_NAME, 'get');
 
         let data,
-            UTF8 = use_synq_token_utf8;
+            UTF16 = use_synq_token_utf16;
 
         if(key !== null)
             data = storage.getItem(`${ SynQ.signature }.${ name }`);
         else
             data = storage.getItem(SynQ.signature + name);
 
-        if(UTF8)
+        if(UTF16)
             SynQ.prevent(data, /[^\u0000-\u00ff]/, ERROR.UTF8_ONLY);
 
-        if(UTF8 && data) {
+        if(UTF16 && data) {
             let array = [];
             for(let index = 0, length = data.length; index < length;)
                 array.push(SynQ.unpack16(data[index++]));
@@ -660,9 +776,9 @@
 
         data = data + '';
 
-        let UTF8 = use_synq_token_utf8;
+        let UTF16 = use_synq_token_utf16;
 
-        if(UTF8)
+        if(UTF16)
             SynQ.prevent(data, /[^\u0000-00ff]/, ERROR.UTF8_ONLY);
 
         if(key !== null) {
@@ -672,7 +788,7 @@
             key = '';
         }
 
-        if(UTF8 && data) {
+        if(UTF16 && data) {
             let array = [];
             for(let index = 0, length = data.length; index < length;)
                 array.push(SynQ.pack16(data[index++], data[index++]));
@@ -696,7 +812,7 @@
         SynQ.prevent(name, [undefined, null, ERROR.NO_NAME], 'download');
 
         let data,
-            UTF8 = use_synq_token_utf8;
+            UTF16 = use_synq_token_utf16;
 
         // '.name' and 'name' are NOT interchangable
         name = SynQ.sign((key? '.': '') + name)
@@ -708,10 +824,10 @@
         else
             data = storage.getItem(`synq://localhost:80/${ name }`);
 
-        if(UTF8)
+        if(UTF16)
             SynQ.prevent(data, /[^\u0000-\u00ff]/, ERROR.UTF8_ONLY);
 
-        if(UTF8 && data) {
+        if(UTF16 && data) {
             let array = [];
             for(let index = 0, length = data.length; index < length;)
                 array.push(SynQ.unpack16(data[index++]));
@@ -848,11 +964,12 @@
 
     // Return the how much space is in use
     SynQ.used = exclusive => {
-        let size = 0;
+        let size = 0,
+        signature = SynQ.shadow || SynQ.signature;
 
         for(let item in storage)
             if(storage.hasOwnProperty(item))
-                if(exclusive && RegExp(SynQ.signature.replace(/(\W)/g, '\\$1')).test(item))
+                if(exclusive && RegExp(signature.replace(/(\W)/g, '\\$1')).test(item))
                     size += storage[item].length | 0;
                 else if(!exclusive)
                     size += storage[item].length | 0;
@@ -915,43 +1032,79 @@
 
     // The hash/signature algorithm (Mi/o, by Ephellon Grey)
     SynQ.sign = (string = '', fidelity) => {
-        let array = (string + '').split(/([^]{16})/),
+        let array = (string += '').split(/([^]{256})/),
             result = [],
             gamma = 0,
-            method;
+            method, base;
 
-        fidelity = 18 - (((fidelity || 0) * 16) | 0);
+        fidelity = 2 + (((+fidelity || 0) * 14) | 0);
         method = s => s? s.charCodeAt(0): s;
+
+        let R = t => {
+            let s = [],
+                S = [],
+                N = 256,
+                u = '',
+                l = (t = (t || u) + u).length;
+
+            if(!l)
+                return u;
+            else
+                t = ' ' + t;
+
+            for(let n = 0; n < N;)
+                s.push(n++);
+
+            for(let n = 0, x = 0, w = 0; n < N; n++) {
+                x = (x + s[n] + t.charCodeAt(n % 1)) % N;
+                s[w] = s[n];
+                s[n] = s[x];
+                s[x] = s[w];
+            }
+
+            for(let n = -1; n < N; n++)
+                S.push(t[s[n]] || u);
+
+            return S.join(u);
+        };
 
         array.forEach((value, index, self) =>
             (value === '')?
-                self.splice(index, 1):
-            gamma += value.charCodeAt(0)
+                (self || this).splice(index, 1):
+            R(value).split('').forEach((character, position) => gamma += +R(character.charCodeAt(0) * (position | 1)))
         );
 
+        gamma = +R(gamma);
+
         for(let index = 0, length = array.length, last = length - 1; index < length; index++)
-            for(let self = array[index], next = (array[index + 1] || ""), mirror = array[last], a, b, c, d, e, f, g = gamma, i = 0, j = self.length, k = mirror.length, l = length, m = k - 1, q = fidelity; i < j; ++i, --m, g = gamma += a + b + c + d + e + f) {
-                a = method(self[i]) | 0;
-                b = method(self[j - i - 1]) | 0;
-                c = method(mirror[m]) | 0;
-                d = method(mirror[k - m]) | 0;
-                e = method(next[i]) | 0;
-                f = method(next[m]) | 0;
-                result.push(Math.abs(
+            for(let self = array[index], next = (array[index + 1] || ''), mirror = array[last], a, b, c, d, e, f, g = gamma, i = 0, j = self.length, k = mirror.length, l = length, m = k - 1, q = fidelity; i < j; ++i, --m, gamma = g += a + b + c + d + e + f) {
+                a = (method(self[i]) | q) | 0;
+                b = (method(self[j - i - 1]) - a) | 0;
+                c = (method(mirror[m]) + b) | 0;
+                d = (method(mirror[k - m]) ^ c) | 0;
+                e = (method(next[i]) | d) | 0;
+                f = (method(next[m]) ^ e) | 0;
+                result.push(
                     (((a ^ ~b) << (i + k)) | (j & e) | g) ^
                     (((b | -c) ^ (m + j)) | (j & f) | g) ^
                     (((c & ~d) << (e - k)) >> (k ^ q) + g) ^
                     (((d << a) ^ (f - j)) >> (k ^ q) + g) ^
                     ((a & b | c ^ d) ^ e - f) << (q & e & f)
-                ));
+                );
             }
 
         result.splice(fidelity, result.length - fidelity);
+        base = ((gamma % 16) + (fidelity % 16)) | 16;
+
         result.forEach((value, index, self) =>
-            self.splice(index, 1, (value ^ gamma).toString((gamma % 20) + 16))
+            self.splice(index, 1, Math.abs(value ^ gamma).toString(base))
         );
 
-        return result.join('').slice(0, 256);
+        result = result.join('').slice(0, 256);
+        gamma = gamma.toString(base);
+        base = (base * (fidelity || 1)).toString(base);
+
+        return R(result) + base + gamma;
     };
 
     /* Miscellaneous helpers */
@@ -1036,10 +1189,33 @@
     };
 
     // Pack UTF8 characters
+    SynQ.pack = string => {
+        let array = [];
+
+        for(let index = 0, length = string.length; index < length;)
+            array.push(SynQ.pack16(string[index++], string[index++]));
+    };
+
+    // Pack UTF8 characters
     SynQ.pack16 = (a, b) => {
         let s = c => (`00000000${ c.charCodeAt(0).toString(2) }`).slice(-8);
 
         return String.fromCharCode(+(`0b${ s(a) + (b? s(b): '') }`));
+    };
+
+    // Unpack UTF16 characters
+    SynQ.unpack = function (string) {
+        let array = [], data = [];
+
+        for(let index = 0, length = string.length; index < length;)
+            array.push(SynQ.unpack16(string[index++]));
+        array = array.join('').split(/([01]{8})/);
+
+        for(let index = 0, length = array.length; index < length; index++)
+            if(array[index] !== '')
+                data.push(String.fromCharCode(+(`0b${ array[index] }`)));
+
+        return data.join('');
     };
 
     // Unpack UTF16 characters
@@ -1048,6 +1224,283 @@
             s = c => (((b = c.charCodeAt(0)) < 0xff? '': '00000000') + b.toString(2)).slice(-16);
 
         return s(a);
+    };
+
+    let JSON, Symbol,
+        Map, WeakMap, Set, WeakSet,
+        Int8Array, Int16Array, Int32Array,
+        Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array,
+        Float32Array, Float64Array;
+
+    // Stringify objects
+    SynQ.deflate = (object = null, filter = (key, value) => value, space = '', indent = 0) => {
+        let pack = SynQ.deflate,
+            json = [],
+            blacklist = [],
+            max = 10,
+            filterfn,
+            ltypes = [Boolean, Number, String],
+            atypes = [Array, Map, Set, WeakMap, WeakSet],
+            otypes = [Object, Int8Array, Int16Array, Int32Array, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Float32Array, Float64Array],
+            constructor = ((object && object.constructor)? object.constructor: null),
+            type =
+                (!!~atypes.indexOf(constructor))?
+                    '[]':
+                (!!~otypes.indexOf(constructor))?
+                    '{}':
+                (!!~ltypes.indexOf(constructor))?
+                    '':
+                (object && typeof object == 'object' && 'toJSON' in object)?
+                    '""':
+                (object !== undefined && object !== null)?
+                    '{}':
+                '';
+
+        if(object === null || !!~ltypes.indexOf(object.constructor))
+            return (
+                (object && object.constructor == String)?
+                    `"${ object.replace(/\\/g, '\\\\') }"`:
+                (object !== null && (object.constructor == Boolean || (object.constructor == Number && (object.valueOf() < Infinity && object.valueOf() > -Infinity))))?
+                    object:
+                null
+            ) + '';
+
+        indent = indent || space.length;
+        space = (
+            (typeof space == 'number')?
+                '\t'.repeat(space):
+            space
+        ).slice(0, max);
+
+        function format(string, data) {
+            if(!filterfn(data.key, data.value))
+                return '';
+
+            for(let regexp = /#\{(\w+)\}/g; regexp.test(string);)
+                string = string.replace(regexp, ($0, $1, $$, $_) => {
+                    if(data.string && data[$1].constructor == String)
+                        return data[$1].replace(/[\\"]/g, '\\$&').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+
+                    return data[$1];
+                });
+
+            return space + string.replace(/\:\s+/, space? ': ': ':');
+        }
+
+        if(!!atypes.indexOf(filter.constructor))
+            filterfn = (key, value) => !!~filter.indexOf(key);
+        else if(filter instanceof Function)
+            filterfn = filter;
+        else
+            filterfn = (key, value) => value;
+
+        if(!!~atypes.indexOf(object.constructor))
+            for(let index = 0, length = object.length | 0; index < length; index++)
+                json.push(format('#{value}', {
+                    value: pack(object[index], filter, space)
+                }));
+        else if('toJSON' in object)
+            json.push(format('#{value}', {
+                key: 'toJSON',
+                value: object.toJSON()
+            })),
+            type = '';
+        else serializing:
+            for(let key in object) {
+                let value = object[key];
+
+                if(value == object || !!~blacklist.indexOf(key)) {
+                    blacklist.push(key);
+                    continue serializing;
+                }
+
+                if(value === undefined || value === null || value.constructor == Function || value.constructor == Symbol)
+                    json.push(format('"#{key}": null', {
+                        key: key,
+                        value: value
+                    }));
+                else if(value.constructor == RegExp)
+                    json.push(format('"#{key}": #{value}', {
+                        key: key,
+                        value: pack(value.source + '$=' + value.flags, filter, space)
+                    }));
+                else if(value.constructor == String)
+                    json.push(format('"#{key}": "#{value}"', {
+                        key: key,
+                        value: value,
+                        string: true
+                    }));
+                else if(!!~ltypes.indexOf(value.constructor))
+                    json.push(format('"#{key}": #{value}', {
+                        key: key,
+                        value: value
+                    }));
+                else if(!!~atypes.indexOf(value.constructor))
+                    json.push(format('"#{key}": #{value}', {
+                        key: key,
+                        value: pack(value, filter, space)
+                    }));
+                else if(!!~otypes.indexOf(value.constructor))
+                    json.push(format('"#{key}": #{value}', {
+                        key: key,
+                        value: pack(value, filter, space + space, space.length)
+                    }));
+                else if(/^synq\:\/\//.test(key))
+                    if(!key.indexOf(SynQ.signature))
+                        json.push(format('"#{key}": "#{value}"', {
+                            key: key,
+                            value: value,
+                            string: true
+                        }));
+                    else
+                        /* foreign SynQ token */;
+                else if(value instanceof Object && !(value instanceof Function))
+                    json.push(format('"#{key}": #{value}', {
+                        key: key,
+                        value: pack(value = Object.assign(value, {
+                            constructor: Object
+                        }), filter, space, space.length)
+                    }));
+                else if(value instanceof Object)
+                    json.push(format('"#{key}": #{value}', {
+                        key: key,
+                        value: '{}'
+                    }));
+                else
+                    json.push(format('"#{key}": "#{value}"', {
+                        key: key,
+                        value: value,
+                        string: true
+                    }));
+            }
+
+        let head = (type[0] || '') + (space? '\n': ''),
+            tail = (space? '\n' + space.slice(indent, space.length): '') + (type[1] || '');
+
+        function trim(array) {
+            for(let index = 0, length = json.length; index < length; index++)
+                if(array[index] === '' || array[index] === undefined)
+                    array.splice(index, 1);
+            return array;
+        }
+
+        for(let index = 0; index < max && !~json.indexOf(undefined); index++)
+            trim(json);
+
+        return (head + json.join(',' + (space? '\n': '')) + tail).replace(/\{\s*\}/g, '{}').replace(/(".+?"\:\s*)undefined\b/g, '$1null');
+    };
+
+    // Parse JSON strings
+    SynQ.inflate = (string, mutator = (key, value) => value) => {
+        let object,
+            parse = SynQ.inflate,
+            R = RegExp,
+            type =
+                /^\s*\{[^]*\}\s*$/.test(string)?
+                    'object':
+                /^\s*\[[^]*\]\s*$/.test(string)?
+                    'array':
+                'literal';
+
+        switch(type) {
+            case 'object':
+                object = {};
+
+                if(/^\s*\{(?:[,\s]*)?\}\s*$/.test(string))
+                    break;
+                else
+                    for(let regexp = /\s*\{([^]*)\}\s*/g, dummy = (string = string.replace(/^\s*\{/, '^').replace(/\}\s*$/, '$')), layer; regexp.test(string);)
+                        string = string.replace(regexp, ($0, $1, $$, $_) => {
+                            for(let index = layer = 0; layer >= 0 && index < $1.length; index++)
+                                layer += $1[index] == '{'? 1: $1[index] == '}'? -1: 0;
+
+                            index -= +(layer < 0);
+
+                            (dummy = $1.split('')).splice(index, 1, ')@');
+                            dummy = dummy.join('');
+
+                            return '@(' + dummy.slice(0, index).replace(/\{/g, '#(').replace(/\}/g, ')#') + dummy.slice(index, dummy.length) + (layer < 0 ? '}' : '');
+                        });
+
+                string = string
+                /* All */
+                    .replace(/#\(/g, '{')
+                    .replace(/\)#/g, '}')
+                /* First */
+                    .replace(/@\(/, '{')
+                    .replace(/\)@/, '}')
+                    .split(/\s*("(?:[^\\"]|\\.)*?"\s*(?:\:\s*(?:null|true|false|\d+|"(?:[^\\"]|\\.)*?"|\[[^]*\]|\{[^]*\}|@\([^]*?\)@)(?=\s*,|(?:\s*,)?\s*\$\s*$))?)/)
+                    .map(value => {
+                        if(/^([\{\s,\}]+|[\^\$])$/.test(value = value.replace(/@\(/g, '{').replace(/\)@/g, '}')) || /^\^|\$$/.test(value))
+                            return;
+
+                        value.replace(/\s*"((?:[^\\"]|\\.)*?)"\s*(?:\:\s*(null|true|false|\d+|"(?:[^\\"]|\\.)*?"|\[[^]*\]|\{[^]*\}))?/);
+
+                        return (R.$2 && R.$2.length)?
+                            object[R.$1] = mutator(R.$1, parse(R.$2.replace(/^\^|\$$/g, ''), mutator)):
+                        object[R.$1] = mutator(R.$1, R.$1.replace(/^\^|\$$/g, ''), mutator);
+                    });
+                break;
+
+            case 'array':
+                object = [];
+
+                if(/^\s*\[\s*(?:,\s*)?\]\s*$/.test(string))
+                    break;
+                else
+                    for(let regexp = /\s*\[([^]*)\]\s*/g, dummy = (string = string.replace(/^\[/, '^').replace(/\]$/, '$')), layer; regexp.test(string);)
+                        string = string.replace(regexp, ($0, $1, $$, $_) => {
+                            for(let index = layer = 0; layer >= 0 && index < $1.length; index++)
+                                layer += $1[index] == '['? 1: $1[index] == ']'? -1: 0;
+
+                            index -= +(layer < 0);
+
+                            (dummy = $1.split('')).splice(index, 1, ')@');
+                            dummy = dummy.join('');
+
+                            return '@(' + dummy.slice(0, index).replace(/\[/g, '#(').replace(/\]/g, ')#') + dummy.slice(index, dummy.length) + (layer < 0 ? ']' : '');
+                        });
+
+                string = string
+                /* All */
+                    .replace(/#\(/g, '[')
+                    .replace(/\)#/g, ']')
+                /* First */
+                    .replace(/@\(/, '[')
+                    .replace(/\)@/, ']');
+
+                let index = 0;
+
+                string
+                    .split(/\s*(null|true|false|\d+|"(?:[^\\"]|\\.)*?"|\[[^]*\]|\{[^]*\}|@\([^]*?\)@|\s*)(?=\s*,|(?:\s*,)?\s*\$\s*$)/)
+                    .map(value => {
+                        if(/^([\[\s,\]]+|[\^\$])$/.test(value = value.replace(/@\(/g, '[').replace(/\)@/g, ']')) || /^\^|\$$/.test(value))
+                            return;
+
+                        object.push(mutator(index++, parse(value.replace(/^\^|\$$/g, ''), mutator)));
+                    });
+                break;
+
+            case 'literal':
+            default:
+                let isString, flags;
+
+                object = (isString = /^"(.*)"$/.test(string))?
+                    R.$1:
+                string.length && +string <= +Infinity?
+                    +string:
+                /\b(true|false)\b/.test(string)?
+                    !(string.length - 4):
+                null;
+
+                if(isString && /\$\=([imguy]+)$/.test(object)) {
+                    flags = R.$1;
+                    object = R(object.replace(R['$&'], ''), flags);
+                }
+                break;
+            }
+
+        return object;
     };
 
     // Help
@@ -1060,178 +1513,277 @@
         let m, i = item.toLowerCase();
 
         switch(i) {
-            /* HTML */
+        /* HTML */
+            case 'attr':
+                m = "Synchronizes an element's attributes. The list should be space separated./~Usage: <% $-@=attributes-to-sync>...<\\%>/~Interpreted Type: Array//$-@: defaults to all attributes if no value is given.";
+                break;
+
             case 'data':
                 m = "Synchronizes an element's value, or innerText (priority to value)./~Usage: <% $-@>...<\\%>/~Interpreted Type: Boolean";
                 break;
+
             case 'host':
                 m = "Creates a main object (for multiple frames), and is given the highest priority. Also sets the element's [NAME] to its [ID], or [SYNQ-UUID]./~Usage: <% $-@=host-name>...<\\%>/~Interpreted Type: String";
                 break;
+
             case 'html':
                 m = "Synchronizes an element's outerHTML./~Usage: <% $-@>...<\\%>/~Interpreted Type: Boolean";
                 break;
+
             case 'skip':
                 m = "Delays synchronizing an element. Especially useful for multiple IFRAMEs with access to the parent document./~Usage: <% $-@=number-of-delays>...<\\%>/~Interpreted Type: Number//$-@: defaults to 0 if no value is given.";
                 break;
+
             case 'text':
                 m = "Synchronizes an element's innerHTML./~Usage: <% $-@>...<\\%>/~Interpreted Type: Boolean";
                 break;
+
             case 'uuid':
-                m = "The UUID that SynQ generates for each synchronized element./~Usage: <% $-@=static-uuid>...<\\%>/~Interpreted Type: String//$-@: if you set [$-@], all copies of the element (including across frames) will need to have the same value. Otherwise, SynQ will handle this assignment automatically.";
+                m = "The UUID that $ generates for each synchronized element./~Usage: <% $-@=static-uuid>...<\\%>/~Interpreted Type: String//$-@: if you set [$-@], all copies of the element (including across frames) will need to have the same value. Otherwise, SynQ will handle this assignment automatically.";
                 break;
 
             /* JS */
             case 'addeventlistener':
-                m = "Adds an event listener to SynQ's {events} method./~Usage: $.@(event-name, callback)/~Arguments: String, Function/~Returns: Number//event-name: {events}./return: the number of events attached.";
+                m = "Adds an event listener to $'s {events} method./~Usage: $.@(event-name, callback)/~Arguments: String, Function/~Returns: Number//event-name: {events}./return: the number of events attached.";
                 break;
+
             case 'append':
-                m = "Adds data to a global array./~Usage: $.@(array-name, data[, key[, delimiter]])/~Arguments: String, String[, String[, String]]/~Returns: <array-name>//key: {key}.";
+                m = "Pushes data to a global array./~Usage: $.@(array-name, data[, key[, delimiter]])/~Arguments: String, String[, String[, String]]/~Returns: <array-name>//key: {key}.";
                 break;
+
             case 'clear':
                 m = "Removes all owned items from storage (related to $)./~Usage: $.@([remove-all])/~Arguments: [Boolean]/~Returns: Undefined//remove-all: if set to true, will remove all private items too.";
                 break;
+
             case 'decodeurl':
-                m = "Decodes a URL string./~Usage: $.@(URL)/~Arguments: String/~Returns: String";
+                m = "Decodes a URL string (e.g. '%20' -> ' ')./~Usage: $.@(URL)/~Arguments: String/~Returns: String";
                 break;
+
+            case 'deflate':
+                m = "Polyfill of JSON.stringify. Defaltes\\serializes objects (turns them into strings)./~Usage: $.@(object[, filter[, spaces]])/~Arguments: *[, Function[, String | Number]]/~Returns: String => '<object>'//object: any JavaScript object./filter: searches for true\\non-empty entries. Called on as:/~for(var key in <object>)/~~<filter>(key, <object>[key]);//spaces: if set, then the ouput will be stylised using indentation.";
+                break;
+
             case 'download':
-                m = "Retruns data from the global storage item (see also, '$.push')./~Usage: $.@(name[, key])/~Arguments: String[, String]/~Returns: String//key: {key}.";
+                m = "Retruns data from the global storage item (see also, '$.get')./~Usage: $.@(name[, key])/~Arguments: String[, String]/~Returns: String//key: {key}.";
                 break;
+
             case 'encodeurl':
-                m = "Encodes a URL string./~Usage: $.@(URL)/~Arguments: String/~Returns: String";
+                m = "Encodes a URL string (e.g. ' ' -> '%20')./~Usage: $.@(URL)/~Arguments: String/~Returns: String";
                 break;
+
             case 'esc':
-                m = "The list delimeter for SynQ to use when storing element values./~Usage: $.@ = delimeter/~Types: String";
+                m = "The list delimeter for $ to use when storing element values./~Usage: $.@ = delimeter/~Types: String/~Current: '{esc}'/~Default: '%%'";
                 break;
+
+            case 'export':
+                m = "Exports (copies) data to the storage object./~Usage: $.@(name)/~Arguments: String~/Returns: <name>";
+                break;
+
             case 'eventlistener':
                 m = "The Event Listener for $ (fires automatically from $)./~Usage: $.@(event)/~Arguments: Object/~Returns: Undefined";
                 break;
-            case 'get':
-                m = "Returns data from the local storage storage item./~Usage: $.@(name[, key])/~Arguments: String[, String]/~Returns: String//key: {key}.";
+
+            case 'find':
+                m = "Searches $ for the given item(s). Can also traverse foreign (unowned) entries./~Usage: $.@(query[, search-private[, previous-finds]])/~Arguments: Array | RegExp | String[, Boolean[, Array]]//query: if you have a $ URL to another site (verbatim), you can search its entries via:/~synq:{uuid}\\?auth=<BtoA {username}:{password}>&all=<search-private>&query=<query>&query=...//previous-finds: used to prevent $ from duplicating entries/URL => auth: btoa(username + ':' + password), only used for VPN searches, where 'password' is the original key (before being signed)";
                 break;
+
+            case 'get':
+                m = "Returns data from the local storage item./~Usage: $.@(name[, key])/~Arguments: String[, String]/~Returns: String//key: {key}.";
+                break;
+
             case 'help':
                 m = "Displays help messages./~Usage: $.@(item-name)/~Arguments: String/~Returns: String";
                 break;
+
+            case 'export':
+                m = "Imports (copies) data from the storage object./~Usage: $.@(name)/~Arguments: String~/Returns: <name>";
+                break;
+
+            case 'inflate':
+                m = "Polyfill of JSON.parse. Inflates\\deserializes strings (turns them into objects)./~Usage: $.@(json-string[, mutator])/~Arguments: String[, Function]/~Returns: Array | Boolean | Object | Number | String | null | undefined => <object>//string: a JSON compliant string./mutator: mutates each entry. Called on as:/~for(var key in <object>)/~~<mutator>(key, <object>[key]);";
+                break;
+
             case 'isnan':
                 m = "Tests to see if an object is a number or not./~Usage: @(object)/~Arguments: */~Returns: Boolean";
                 break;
+
             case 'last':
                 m = "An array that's used to hold each item's name in the order they're created./~Usage: $.@ = ['name-1', 'name-2'...]/~Types: Array";
                 break;
+
             case 'lastupload':
                 m = "An array that's used to hold each item's name in the order they're created./~Usage: $.@ = ['name-1', 'name-2'...]/~Types: Array";
                 break;
+
             case 'list':
                 m = "Returns the currently owned storage items./~Usage: $.@([show-all])/~Arguments: Boolean/~Returns: Object//show-all: when set to true, will return private items as well.";
                 break;
+
             case 'lock':
             case 'unlock':
                 m = "Locks and unlocks a string./~Usage: $.@(data, key)/~Arguments: String, String/~Returns: String";
                 break;
+
+            case 'pack':
+                m = "Packs (encodes) a UTF-8 string into UTF-16 characters./~Usage: $.@(string)/~Arguments: String/~Return: String => UTF16";
+                break;
+
             case 'pack16':
                 m = "Packs (encodes) a UTF-16 character, by using two UTF-8 characters./~Usage: $.@(character[, character])/~Arguments: Character[, Character]/~Returns: String//return: if the second character is missing, then the first character will be returned.";
                 break;
+
             case 'parsefunction':
                 m = "Returns an array of function data./~Usage: $.@(function-string)/~Arguments: String/~Returns: Array => {0: [function parameters], 1: [function statements], 2: [function name], length: 3}";
                 break;
+
             case 'parsesize':
                 m = "Returns a number from an SI formatted* string./~Usage: $.@(number[, base[, symbol]])/~Arguments: String[, Number[, String]]/~Returns: Number//* Does not recognize 'd' (deci), 'h' (hecto) or 'c' (centi)";
                 break;
+
             case 'parseurl':
                 m = "Returns a URL object./~Usage: $.@(URL)/~Arguments: String/~Returns: Object => {href, origin, protocol, scheme, username, password, host, port, path, search, searchParameters, hash}";
                 break;
+
             case 'ping':
-                m = "Pings an address. If no address is given, then pings a random address. Powered by Lorem Picsum (https:picsum.photos)./~Usage: $.@(address[, options])/~Arguments: String[, Object => {callback, pass, fail, timeout}]/~Returns: Undefined//address: must be an address to an image./return: calls on <callback> using: <callback>.call(null, ping.trip);//ping.trip => {/~address: <address>/~resolve: [image address]/~size: [image height * image.width]/~speed: [image size size \\ time]/~status: 'pass' | 'fail'/~time: [ping time]/~uplink: [speed \\ 2]/}";
+                m = "Pings an address. If no address is given, then pings a random address. Powered by Lorem Picsum (https:picsum.photos)./~Usage: $.@(address[, options])/~Arguments: String[, Object => {callback, pass, fail, timeout}]/~Returns: Undefined//address: must be an address to an image./return: calls on <callback> using: <callback>.call(null, ping.trip);//ping.trip => {/~address: <address>/~resolve: [image address]/~size: [image height * image.width]/~speed: [image size \\ time]/~status: 'pass' | 'fail'/~time: [ping time]/~uplink: [speed \\ 2]/}";
                 break;
+
             case 'pop':
                 m = "Removes, and returns the item from the local storage./~Usage: $.@([name[, key]])/~Argumments: [String[, String]]/~Returns: String//name: the name of the item to fetch. If left empty, will use the name of the last item created./key: {key}.";
                 break;
+
             case 'prevent':
-                m = "Used to prevent a value from being used./~Usage: $.@(variable, illegal-values, error-message[, helper-link])/~Arguments: (Array|String), (Array|RegExp), String[, String]/~Returns: Undefined/~Throws: Error(<message[ + helper-link]>)//helper-link: the word, or phrase used by SynQ.help to display the help message,/~~e.g. SynQ.prevent(null, [null], 'This is an example error', 'example') => \"... see SynQ.help('example')\".";
+                m = "Used to prevent a value from being used./~Usage: $.@(value-to-test, illegal-values, error-message[, helper-link])/~Arguments: Array | String, Array | RegExp, String[, String]/~Returns: Undefined/~Throws: Error(<message[ + helper-link]>)//helper-link: the word, or phrase used by $.help to display the help message,/~~e.g. $.prevent($.doesNotExist, [null, undefined], 'This is an example error', 'example')/~~throws Error => 'This is an eample error, see $.help('example')'.";
                 break;
+
             case 'pull':
                 m = "Returns data from a local storage array./~Usage: $.@(array-name[, key[, delimiter]])/~Arguments: String[, String[, String]]/~Returns: Array//key: {key}";
                 break;
+
             case 'push':
-                m = "Appends data to a local storage array (delimited by $.esc)./~Usage: $.@(array-name, data[, key])/~Arguments: String, String[, String]/~Returns: String<array-name>//key: {key}";
+                m = "Pushes data to a local storage array (delimited by $.esc)./~Usage: $.@(array-name, data[, key])/~Arguments: String, String[, String]/~Returns: String<array-name>//key: {key}";
                 break;
+
             case 'recall':
-                m = "Gets data from a global array./~Usage: $.@(array-name[, key[, delimiter]])/~Arguments: String[, String[, String]]/~Returns: Array//key: {key}";
+                m = "Gets data from a global array (see also, '$.pull')./~Usage: $.@(array-name[, key[, delimiter]])/~Arguments: String[, String[, String]]/~Returns: Array//key: {key}";
                 break;
             case 'removeeventlistener':
-                m = "Removes a(n) event listener(s)./~Usage: $.@(function-name[, event-name])/~Arguments: String[, String]/~Returns: Array | String//event-name: {events}. If left empty, will remove <function-name> from every event.";
+                m = "Removes a(n) event listener(s)./~Usage: $.@(function-name[, event-name])/~Arguments: String[, String]/~Returns: Array | String//event-name: {events}./~If left empty, will remove <function-name> from every event.";
                 break;
+
             case 'salt':
                 m = "Salts (encrypts) a string, usually a password./~Usage: $.@(string)/~Arguments: String/~Returns: String";
                 break;
+
             case 'set':
-                m = "Adds the item to the storage./~Usage: $.@(name, data[, key])/~Arguments: String, String[, String]/~Returns: <name>//key: {key}.";
+                m = "Adds the item to storage./~Usage: $.@(name, data[, key])/~Arguments: String, String[, String]/~Returns: <name>//key: {key}.";
                 break;
+
             case 'sign':
                 m = "Hashes a string (think of SHA, or MD5)./~Usage: $.@(string[, fidelity-level])/~Arguments: String[, Float]/~Returns: String//fidelity-level: determines the size of the returned string. The closer to 1 the level is, the shorter the string.";
                 break;
+
             case 'signature':
-                m = "The UUID of the current page (if use_global# is undefined), or current domain.//Current Signature: {sign}";
+                m = "The UUID of the current page (if use_global# is undefined), or current domain.//Current Signature: {signature}/Global Token Flag: {global#}";
                 break;
+
             case 'size':
-                m = "1. Returns the maximum amount of space for the storage (in bytes; 1B = 8b)/~Usage: $.@()/~Arguments: NONE/~Returns: Integer//2. Returns the SI formatted version of the given number./~Usage: $.@(number[base, [symbol]])/~Arguments: Number[, Number[, String]]/~Returns: String//base: the base to use, e.g. 1000; default is 1024./symbol: the symbol to append to the returned string, default is 'iB'.";
+                m = "1. Returns the maximum amount of space for the storage (in bytes; 1B = 8b)/~Usage: $.@()/~Arguments: NONE/~Returns: Integer//2. Returns the SI formatted version of the given number./~Usage: $.@(number[, base[, symbol]])/~Arguments: Number[, Number[, String]]/~Returns: String//base: the base to use, e.g. 1000; default is 1024./symbol: the symbol to append to the returned string, default is 'iB'.";
                 break;
+
             case 'snip':
-                m = "Removes, and returns the item from the global storage (similar to '$.pop')./~Usage: $.@(name[, key])/~Arguments: String[, String]/~Returns: String//key: {key}.";
+                m = "Removes, and returns the item from the global storage (see also, '$.pop')./~Usage: $.@(name[, key])/~Arguments: String[, String]/~Returns: String//key: {key}.";
                 break;
+
             case 'syn':
                 m = "The attribute name(s) for elements to update./~Usage: $.@ = ['name-1', 'name-2'...]/~Types: Array | String/~Default: {syn}";
                 break;
+
             case 'synq':
-                m = "The main function and container. Updates the storage, while also updating all 'attached' elements./~Usage: $([attribute-names])/~Arguments: String | Array/~Returns: Undefined//attribute-name: if you want to use multiple names, you can also set the SynQ.syn property.";
+                m = "The main function and container. Updates the storage, while also updating all 'attached' elements./~Usage: $([attribute-names])/~Arguments: String | Array/~Returns: Undefined//attribute-name: if you want to use multiple names, you can also set $.syn";
                 break;
+
             case 'triggerevent':
                 m = "Triggers all event listeners for an event./~Usage: $.@(event-name[, data])/~Arguments: String[, Array]/~Returns: <data>//data: the arguments to pass onto each listener.";
                 break;
+
+            case 'unpack':
+                m = "Unacks (decodes) a UTF-16 string into UTF-8 characters./~Usage: $.@(string)/~Arguments: String/~Return: String => {UTF8}";
+                break;
+
             case 'unpack16':
                 m = "Unpacks (decodes) a UTF-16 character into two UTF-8 characters./~Usage: $.@(character)/~Arguments: Character/~Returns: String//return: automatically handles UTF-8 characters, and returns the character iteslf.";
                 break;
+
             case 'upload':
-                m = "Adds data to the global storage item (see also, '$.pull')./~Usage: $.@(name[, data[, key]])/~Arguments: String[, String[, String]]/~Returns: String//return: a UUID for the data./data: if no data is given, still returns the UUID./key: {key}.";
+                m = "Adds data to global storage (see also, '$.set')./~Usage: $.@(name[, data[, key]])/~Arguments: String[, String[, String]]/~Returns: String//return: a UUID for the data./data: if no data is given, still returns the UUID./key: {key}.";
                 break;
+
             case 'used':
-                m = "Returns the number of bytes (1B = 8b) in use./~Usage: $.@([synq-only])/~Arguments: [Boolean]/~Returns: Integer//synq-only: when set to true, will ony return the amount of owned space $ is using.";
+                m = "Returns the number of bytes (1B = 8b) in use./~Usage: $.@([$-only])/~Arguments: [Boolean]/~Returns: Integer//$-only: when set to true, will ony return the amount of owned space $ is using.";
                 break;
+
             case 'usecookie':
                 m = "Forces the page to use cookies instead of the localStorage./This may increase storage capcity on some browsers*, but not all. See the table below.//Browser (version)/~UTF-16 \\ UTF-8//Chrome (65.0.3325.181)/~22 \\ 44 MiB/Firefox (59.0.2)/~22 \\ 44 MiB/Opera (52.0.2871.40)/~22 \\ 44 MiB/Safari (7534.57.2)**/~22 \\ 44 B/Edge (41.16299.248.0)/~22 \\ 44 MiB/Internet Explorer (11.309.16299.0)**/~32 \\ 64 B//* Obtained values by hand (Windows 10 PC, x64)./** Note that this browser wasn't intended for my machine. Also, the cookie size can be changed by the user.";
                 break;
+
+            case 'useuuid':
+                m = "TODO!Forces $ to use the assigned value as the 'UUID.'/This can be useful for dynamic pages that change their name often (like CodePen's debug feature), but still need a static ID.//Basically, a manual, selective version of 'global#'";
+                break;
+
             case 'useglobal':
                 m = "Used to determine if $ should use a local* or global** name.//* $ will save all data for the current URL only, i.e. http:github.com\\page-1 will not have access to http:github.com\\page-2./** $ will save all data for the current host, i.e. http:github.com will be used by $, instead of http:github.com\\page-n.";
                 break;
-            case 'useutf8':
-                m = "Used to instruct SynQ to save data as UTF-16 streams, e.g. 'acdf' will be combined into 'be' (as an example)./It does this by combining UTF-8 characters (\u0000 - ÿ), and generating a UTF-16 character (Ā - ￿).";
+
+            case 'useutf16':
+                m = "Used to instruct $ to save data as UTF-16 streams, e.g. 'acdf' will be combined into 'be' (as an example)./It does this by combining UTF-8 characters (\u0000 - ÿ), and generating a UTF-16 character (Ā - ￿).";
                 break;
+
+            case 'usevpn':
+                m = "Forces $ to use a VPN-like setup with a 'private' session. This uses sessionStorage; a one-time, non-iterable signature; and a forced local state./~Usage: vpn# = <value>/~Interpreted Type: String";
+                break;
+
             case '':
             case '*':
-                m = "Help can be used for the following items://<!-- HTML -->//synq-data/synq-host/synq-html/synq-skip/synq-text/synq-uuid//\\* JavaScript *\\//ping/$/~addEventListener/~append/~clear/~decodeURL/~download/~enocdeURL/~esc/~eventlistener/~get/~help/~host/~last/~list/~lock/~pack16/~parseFunction/~parseSize/~parseURL/~pop/~prevent/~pull/~push/~recall/~removeEventListener/~salt/~set/~sign/~signature/~size/~snip/~syn/~triggerEvent/~unlock/~unpack16/~upload/~used/use_cookie#/use_global#/use_utf8#";
+                m = "Help can be used for the following items://<!-- HTML -->//$-attr/$-data/$-host/$-html/$-skip/$-text/$-uuid//\\* JavaScript *\\//ping/$/~addEventListener/~append#push/~clear/~decodeURL/~deflate/~download#get/~enocdeURL/~esc/~eventlistener/~find/~get/~help/~host/~inflate/~last/~list/~lock/~pack/~pack16/~parseFunction/~parseSize/~parseURL/~pop/~prevent/~pull/~push/~recall#pull/~removeEventListener/~salt/~set/~sign/~signature/~size/~snip#pop/~syn/~triggerEvent/~unlock/~unpack/~unpack16/~upload#set/~used/cookie#/global#/utf16#/uuid#/vpn#";
                 break;
+
             default:
                 m = "Sorry, couldn't find '@'; try $.help('*') to list all items that have help messages.";
                 break;
-        }
+            }
 
-        m = (`/${ m }/`)
-            .replace(/\//g, '\n')
-            .replace(/~/g, '\t')
-            .replace(/\$-/g, 'synq-')
-            .replace(/\$/g, 'SynQ')
-            .replace(/_(\w+)\b#/g, '_synq_token_$1')
-            .replace(/%/g, 'element')
-            .replace(/@/g, item)
-            .replace(/\\/g, '/')
-            .replace(/http(s)?\:/g, 'http$1://')
-            .replace(/\{key\}/gi, 'the password to lock/unlock the data with')
-            .replace(/\{events\}/gi, SynQ.events.split(' ')
-                .join(', ')
-                .replace(/(.+),\s*(.+?)$/, '$1, or $2')
-            )
-            .replace(/\{sign\}/gi, SynQ.signature)
-            .replace(/\{syn\}/gi, `["${ SynQ.syn.join('","') }"]`);
-        return m;
+            m = (`/${ m }/`)
+                .replace(/\bTODO!/, "This feature (@) is not yet ready, but is planned for future releases./Please note that the documentation for '@' is not final, and may change or be removed.//")
+                .replace(/\//g, '\n')
+                .replace(/~/g, '\t')
+                .replace(/\\/g, '/')
+                .replace(/\$-/g, 'synq-')
+                .replace(/\$/g, 'SynQ')
+                .replace(/\b(?:use_?)?(\w+)#(?!\b)/g, 'use_synq_token_$1')
+                .replace(/%/g, 'element')
+                .replace(/#(\w+)/g, ' - Global $1')
+                .replace(/@/g, item)
+                .replace(/\b(https?|synq)\:/g, '$1://')
+                .replace(/(\w+\s+\|(?:[\w \|]+?))( ?[^\w |])/g, '($1)$2')
+                .replace(/\B'([^']+?)'\B/g, '"$1"')
+                .replace(/\{key\}/gi, 'the password to lock/unlock the data with')
+                .replace(/\{events\}/gi, SynQ.events.split(' ')
+                    .join(', ')
+                    .replace(/(.+),\s*(.+?)$/, '$1, or $2')
+                )
+                .replace(/\{syn\}/gi, '["' + SynQ.syn.join('","') + '"]');
+
+            for(let r = /\{(\w+?)\}/g, e = [], i = 0; r.test(m) && !~e.indexOf(RegExp['$&']);)
+                m = m.replace(r, ($0, $1, $$, $_) =>
+                    ($1 in SynQ)?
+                        SynQ[$1]:
+                    ($1 in window)?
+                        window[$1]:
+                    e[i++] = $0
+                );
+
+            return m;
     };
 
     /* Polyfills */
@@ -1240,11 +1792,17 @@
         Object.defineProperty(win, 'localStorage', new(function() {
             let keys = [],
                 StorageObject = {},
+                onstorage;
+
+            try {
                 onstorage = new CustomEvent('storage', {
                     bubbles: false,
                     cancelable: false,
                     composed: true,
                 });
+            } catch(error) {
+                onstorage = win.onstorage;
+            }
 
             Object.defineProperty(StorageObject, 'getItem', {
                 value: key => (
@@ -1349,18 +1907,25 @@
             this.enumerable = true;
         })());
 
-    storage = win.localStorage;
+    storage = (use_synq_token_vpn === undefined)?
+        win.localStorage:
+    win.sessionStorage || win.localStorage;
 
     // navigator.connection - Mozilla, Ephellon
     if(!('connection' in nav))
         Object.defineProperty(win, 'NetworkInformation', new(function() {
-            let keys = [],
-                NetworkObject = {},
-                onnetwork = new CustomEvent('online', {
+            let NetworkObject = {},
+                onnetwork;
+
+            try {
+                onnetwork = new CustomEvent("online", {
                     bubbles: false,
                     cancelable: false,
-                    composed: true,
+                    composed: true
                 });
+            } catch(error) {
+                onnetwork = null;
+            }
 
             ping('', {
                 callback: TripInformation => {
@@ -1442,27 +2007,43 @@
 
     /* Setup and auto-management */
     // Auto-update & run
-    if(use_synq_token_global === undefined)
+    if(use_synq_token_uuid !== undefined)
         Object.defineProperty(SynQ, 'signature', {
-            value: `synq://${ SynQ.sign(location, 1) }/`,
+            value: `synq://${ use_synq_token_uuid }/`,
             writable: false,
             configurable: false,
             enumerable: true,
         });
-    else
+    else if(use_synq_token_vpn !== undefined)
+        Object.defineProperty(SynQ, 'signature', {
+            value: `synq://${ SynQ.sign(+(new Date)) }:${ use_synq_token_vpn = SynQ.sign(use_synq_token_vpn, 0.75) }@${ SynQ.sign(location, 1) }:443/`,
+            writable: false,
+            configurable: false,
+            enumerable: true,
+        });
+    else if(use_synq_token_global !== undefined)
         Object.defineProperty(SynQ, 'signature', {
             value: `synq://${ SynQ.sign(location.origin, 1) }/`,
             writable: false,
             configurable: false,
             enumerable: true,
         });
+    else
+        Object.defineProperty(SynQ, 'signature', {
+            value: `synq://${ SynQ.sign(location.origin + location.pathname) }/`,
+            writable: false,
+            configurable: false,
+            enumerable: true,
+        });
 
     SynQ.eventName = '.events';
-    SynQ.events = 'set get pop push pull upload download snip append recall clear';
+    SynQ.events = 'set get pop push pull upload download snip append recall import export clear copy';
     SynQ.last = [];
     SynQ._last = [];
     SynQ.host = null;
+    SynQ.shadow = null;
     SynQ[__] |= 0;
+
     SynQ.EventListener();
 
     win.addEventListener('storage', win.onstorage = SynQ.EventListener, false);
